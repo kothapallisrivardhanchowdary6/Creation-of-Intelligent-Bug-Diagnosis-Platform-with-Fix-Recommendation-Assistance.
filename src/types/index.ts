@@ -51,10 +51,14 @@ export interface TriageResult {
 
 export interface LogAnalysisResult {
   exceptions: ExceptionInfo[];
-  stackTraceAnalysis: string;
+  stackTraceAnalysis?: string;
   errorPatterns: string[];
   suspiciousLogs: string[];
   summary: string;
+  // M2 additions
+  failurePoint?: string;
+  codePath?: string;
+  confidence?: number;
 }
 
 export interface ExceptionInfo {
@@ -62,6 +66,15 @@ export interface ExceptionInfo {
   message: string;
   file?: string;
   line?: number;
+  // M2 additions
+  exceptionType?: string;
+  errorMessage?: string;
+  fileName?: string;
+  className?: string;
+  methodName?: string;
+  lineNumber?: number;
+  codePath?: string;
+  confidence?: number;
 }
 
 export interface RootCauseResult {

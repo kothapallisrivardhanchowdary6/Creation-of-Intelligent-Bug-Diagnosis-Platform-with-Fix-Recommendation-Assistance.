@@ -148,7 +148,11 @@ export function generateMockAnalysis(bug: Bug): AnalysisResult {
       suspiciousLogs: hasErrorLogs
         ? ['ERROR: Connection timeout after 30000ms', 'WARN: Retry attempt 3/3 failed', 'FATAL: Unrecoverable state detected']
         : ['No suspicious log patterns identified without log data'],
-      summary: `Analysis identified ${extractExceptions(bug).length} exception(s) and ${hasStackTrace ? 'a multi-layer' : 'no'} failure pattern. The root cause appears to be related to ${determineCategory(bug).toLowerCase()} handling.`
+      summary: `Analysis identified ${extractExceptions(bug).length} exception(s) and ${hasStackTrace ? 'a multi-layer' : 'no'} failure pattern. The root cause appears to be related to ${determineCategory(bug).toLowerCase()} handling.`,
+      // M2 additions
+      failurePoint: hasStackTrace ? extractFailurePoint(bug) : undefined,
+      codePath: hasStackTrace ? extractCodePath(bug) : undefined,
+      confidence: hasStackTrace ? 0.85 : hasErrorLogs ? 0.65 : 0.4
     },
     rootCause: {
       probableCause: `The most likely root cause is a ${determineCategory(bug).toLowerCase()} issue in the ${determineComponent(bug)} component, specifically related to ${getSpecificCause(bug)}.`,
@@ -238,23 +242,66 @@ function determineComponent(bug: Bug): string {
 }
 
 function extractExceptions(bug: Bug) {
-  const exceptions = [];
+  const exceptions: any[] = [];
   if (bug.stackTrace) {
     const lines = bug.stackTrace.split('\n');
     for (const line of lines) {
       if (line.includes('Exception') || line.includes('Error') || line.includes('at ')) {
-        exceptions.push({
+        // Try to parse Java-style: at com.package.Class.method(File.java:123)
+        const javaMatch = line.match(/at\s+([\w.$]+)\.([\w$]+)\(([^:]+):(\d+)\)/);
+        // Try Python-style: File "path.py", line 123, in method
+        const pyMatch = line.match(/File "([^"]+)", line (\d+), in (\w+)/);
+        // Try Node-style: at Method (/path/file.js:123:45)
+        const nodeMatch = line.match(/at\s+(.+?)\s+\(([^:]+):(\d+):(\d+)\)/);
+        
+        const exc: any = {
           type: line.split(':')[0].trim() || 'Unknown Exception',
           message: line.trim(),
           file: line.includes('at ') ? line.split('(')[1]?.replace(')', '') : undefined
-        });
+        };
+        
+        if (javaMatch) {
+          exc.exceptionType = exc.type;
+          exc.errorMessage = exc.message;
+          exc.className = javaMatch[1].split('.').pop();
+          exc.methodName = javaMatch[2];
+          exc.fileName = javaMatch[3];
+          exc.lineNumber = parseInt(javaMatch[4]);
+          exc.codePath = `${javaMatch[1]}.${javaMatch[2]}`;
+          exc.confidence = 0.9;
+        } else if (pyMatch) {
+          exc.exceptionType = exc.type;
+          exc.errorMessage = exc.message;
+          exc.fileName = pyMatch[1];
+          exc.lineNumber = parseInt(pyMatch[2]);
+          exc.methodName = pyMatch[3];
+          exc.codePath = `${pyMatch[1]}:${pyMatch[2]} in ${pyMatch[3]}`;
+          exc.confidence = 0.85;
+        } else if (nodeMatch) {
+          exc.exceptionType = exc.type;
+          exc.errorMessage = exc.message;
+          exc.methodName = nodeMatch[1];
+          exc.fileName = nodeMatch[2];
+          exc.lineNumber = parseInt(nodeMatch[3]);
+          exc.codePath = `${nodeMatch[2]}:${nodeMatch[3]}`;
+          exc.confidence = 0.8;
+        } else {
+          exc.exceptionType = exc.type;
+          exc.errorMessage = exc.message;
+          exc.confidence = 0.5;
+        }
+        
+        exceptions.push(exc);
       }
     }
   }
   if (exceptions.length === 0) {
     exceptions.push({
       type: 'RuntimeException',
-      message: 'Unhandled exception in processing pipeline'
+      message: 'Unhandled exception in processing pipeline',
+      exceptionType: 'RuntimeException',
+      errorMessage: 'Unhandled exception in processing pipeline',
+      confidence: 0.4
     });
   }
   return exceptions.slice(0, 5);
@@ -294,6 +341,58 @@ function getRemediationFix(bug: Bug): string {
   };
 
   return fixes[category] || `Review and fix the error handling in ${component}. Add proper validation, implement defensive programming patterns, and ensure comprehensive test coverage for the affected code paths.`;
+}
+
+// ============================================================
+// M2 Helper Functions
+// ============================================================
+
+function extractFailurePoint(bug: Bug): string {
+  if (!bug.stackTrace) return 'Unknown';
+  
+  // Try to extract from Java stack trace
+  const javaMatch = bug.stackTrace.match(/at\s+([\w.$]+)\((\w+\.java):(\d+)\)/);
+  if (javaMatch) {
+    return `${javaMatch[2]} line ${javaMatch[3]} in ${javaMatch[1].split('.').pop()}`;
+  }
+  
+  // Try Python
+  const pyMatch = bug.stackTrace.match(/File "([^"]+)", line (\d+), in (\w+)/);
+  if (pyMatch) {
+    return `${pyMatch[1]} line ${pyMatch[2]} in ${pyMatch[3]}`;
+  }
+  
+  // Try Node.js
+  const nodeMatch = bug.stackTrace.match(/at\s+\w+\s+\(([^:]+):(\d+):(\d+)\)/);
+  if (nodeMatch) {
+    return `${nodeMatch[1]} line ${nodeMatch[2]}`;
+  }
+  
+  return 'Failure point could not be determined from stack trace';
+}
+
+function extractCodePath(bug: Bug): string {
+  if (!bug.stackTrace) return 'Unknown';
+  
+  // Try to extract from Java stack trace
+  const javaMatch = bug.stackTrace.match(/at\s+([\w.$]+\.\w+)\(/);
+  if (javaMatch) {
+    return javaMatch[1];
+  }
+  
+  // Try Python
+  const pyMatch = bug.stackTrace.match(/File "([^"]+)", line (\d+), in (\w+)/);
+  if (pyMatch) {
+    return `${pyMatch[1]}:${pyMatch[2]} in ${pyMatch[3]}`;
+  }
+  
+  // Try Node.js
+  const nodeMatch = bug.stackTrace.match(/at\s+(.+?)\s+\(([^)]+)\)/);
+  if (nodeMatch) {
+    return `${nodeMatch[1]} (${nodeMatch[2]})`;
+  }
+  
+  return 'Code path could not be determined';
 }
 
 // ============================================================

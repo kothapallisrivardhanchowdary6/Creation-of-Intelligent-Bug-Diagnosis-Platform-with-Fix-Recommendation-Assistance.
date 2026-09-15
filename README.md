@@ -1,8 +1,16 @@
-# AI-Based Software Defect Analysis System — Milestone 1
+# AI-Based Software Defect Analysis System — Milestones 1 & 2
 
 ## Overview
 
 An intelligent software defect analysis system that uses AI agents, RAG (Retrieval-Augmented Generation), and semantic search to automatically triage, analyze, and provide remediation recommendations for software bugs.
+
+### Milestone 2 Update
+M2 adds production-grade Triage and Log Analysis agents with:
+- Pydantic-validated structured output
+- Deterministic regex-based stack trace parsing (Java, Python, Node.js)
+- Parallel agent execution via async orchestrator
+- Combined bug context for downstream agents
+- Graceful handling of missing/messy data
 
 ## Architecture
 

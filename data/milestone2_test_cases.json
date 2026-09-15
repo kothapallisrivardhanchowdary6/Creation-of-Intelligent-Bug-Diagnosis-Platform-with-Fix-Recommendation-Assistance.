@@ -1,0 +1,207 @@
+{
+  "test_cases": [
+    {
+      "id": "TC-001",
+      "description": "Java NullPointerException with full stack trace",
+      "bug": {
+        "title": "NullPointerException in UserService when processing null email",
+        "description": "The application crashes with NullPointerException when attempting to process a user with null email address.",
+        "stack_trace": "java.lang.NullPointerException: Cannot invoke method on null object\n\tat com.app.service.UserService.processEmail(UserService.java:45)\n\tat com.app.controller.UserController.handleRequest(UserController.java:23)",
+        "error_logs": "2024-01-15 10:23:45 ERROR c.a.s.UserService - Failed to process user",
+        "environment": "Java 17, Spring Boot 3.2"
+      },
+      "expected": {
+        "severity": "high",
+        "priority": "P1",
+        "exception_type": "NullPointerException",
+        "file_name": "UserService.java",
+        "line_number": 45,
+        "method_name": "processEmail"
+      }
+    },
+    {
+      "id": "TC-002",
+      "description": "Python ValueError with traceback",
+      "bug": {
+        "title": "ValueError when parsing invalid date format",
+        "description": "The report generator crashes with ValueError when encountering dates in unexpected formats.",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/reports/generator.py\", line 156, in parse_date\n    return datetime.strptime(date_str, '%Y-%m-%d')\nValueError: time data '15/01/2024' does not match format",
+        "error_logs": "2024-01-15 14:30:22 ERROR reports.generator - Date parsing failed",
+        "environment": "Python 3.11, Django 4.2"
+      },
+      "expected": {
+        "severity": "medium",
+        "priority": "P2",
+        "exception_type": "ValueError",
+        "file_name": "/app/reports/generator.py",
+        "line_number": 156,
+        "method_name": "parse_date"
+      }
+    },
+    {
+      "id": "TC-003",
+      "description": "Node.js TypeError with stack trace",
+      "bug": {
+        "title": "TypeError: Cannot read property 'id' of undefined",
+        "description": "The REST API crashes when handling requests with missing required fields.",
+        "stack_trace": "TypeError: Cannot read property 'id' of undefined\n    at UserProfileHandler.getUser (/app/api/users.js:89:24)\n    at Layer.handle (/app/node_modules/express/lib/router/layer.js:95:5)",
+        "error_logs": "2024-01-15T16:45:33 ERROR: Unhandled exception in request handler",
+        "environment": "Node.js 18, Express 4.18"
+      },
+      "expected": {
+        "severity": "high",
+        "priority": "P1",
+        "exception_type": "TypeError",
+        "file_name": "/app/api/users.js",
+        "line_number": 89,
+        "method_name": "getUser"
+      }
+    },
+    {
+      "id": "TC-004",
+      "description": "Critical security vulnerability",
+      "bug": {
+        "title": "SQL injection vulnerability in login form",
+        "description": "Security audit discovered SQL injection vulnerability. Attackers can bypass authentication. Critical security issue.",
+        "stack_trace": "",
+        "error_logs": "2024-01-15 09:00:00 CRITICAL security.audit - SQL injection vulnerability detected",
+        "environment": "Java 11, Spring Security 5.8"
+      },
+      "expected": {
+        "severity": "critical",
+        "priority": "P0",
+        "exception_type": null,
+        "file_name": null,
+        "line_number": null,
+        "method_name": null
+      }
+    },
+    {
+      "id": "TC-005",
+      "description": "Memory leak with OutOfMemoryError",
+      "bug": {
+        "title": "OutOfMemoryError: Java heap space in image processing",
+        "description": "The image processing service runs out of memory. Heap space exhausted. Occurs during batch processing.",
+        "stack_trace": "java.lang.OutOfMemoryError: Java heap space\n\tat java.util.Arrays.copyOf(Arrays.java:3537)\n\tat com.app.service.ImageProcessor.resize(ImageProcessor.java:234)",
+        "error_logs": "2024-01-15 11:20:15 FATAL c.a.s.BatchProcessor - OutOfMemoryError",
+        "environment": "Java 17, 8GB heap"
+      },
+      "expected": {
+        "severity": "critical",
+        "priority": "P0",
+        "exception_type": "OutOfMemoryError",
+        "file_name": "ImageProcessor.java",
+        "line_number": 234,
+        "method_name": "resize"
+      }
+    },
+    {
+      "id": "TC-006",
+      "description": "Missing logs - only description",
+      "bug": {
+        "title": "Slow performance on dashboard page",
+        "description": "The dashboard page takes over 10 seconds to load. This is a recent regression after the last deployment.",
+        "stack_trace": "",
+        "error_logs": "",
+        "environment": "React 18, Chrome 120"
+      },
+      "expected": {
+        "severity": "medium",
+        "priority": "P2",
+        "exception_type": null,
+        "file_name": null,
+        "line_number": null,
+        "method_name": null
+      }
+    },
+    {
+      "id": "TC-007",
+      "description": "Race condition in concurrent processing",
+      "bug": {
+        "title": "Race condition in payment processing causes duplicate charges",
+        "description": "Under high concurrency, the payment processor creates duplicate charges. Thread synchronization issue in the transaction handler.",
+        "stack_trace": "java.util.ConcurrentModificationException\n\tat java.util.HashMap$HashIterator.nextNode(HashMap.java:1597)\n\tat com.app.service.PaymentProcessor.processTransaction(PaymentProcessor.java:178)",
+        "error_logs": "2024-01-15 13:45:00 ERROR c.a.s.PaymentProcessor - Concurrent modification detected\n2024-01-15 13:45:01 ERROR c.a.s.PaymentProcessor - Duplicate transaction created",
+        "environment": "Java 17, Spring Boot 3.2, 100 concurrent users"
+      },
+      "expected": {
+        "severity": "critical",
+        "priority": "P0",
+        "exception_type": "ConcurrentModificationException",
+        "file_name": "PaymentProcessor.java",
+        "line_number": 178,
+        "method_name": "processTransaction"
+      }
+    },
+    {
+      "id": "TC-008",
+      "description": "Low severity enhancement request",
+      "bug": {
+        "title": "Add dark mode toggle to settings page",
+        "description": "Users have requested a dark mode option. This is a nice to have enhancement for the settings page.",
+        "stack_trace": "",
+        "error_logs": "",
+        "environment": "Web application"
+      },
+      "expected": {
+        "severity": "low",
+        "priority": "P3",
+        "exception_type": null,
+        "file_name": null,
+        "line_number": null,
+        "method_name": null
+      }
+    },
+    {
+      "id": "TC-009",
+      "description": "Connection timeout with network error",
+      "bug": {
+        "title": "Connection timeout when calling external payment API",
+        "description": "The payment gateway API call times out after 30 seconds. Network connectivity issues to the external service.",
+        "stack_trace": "java.net.SocketTimeoutException: Connect timed out\n\tat java.net.PlainSocketImpl.connect(PlainSocketImpl.java:172)\n\tat com.app.client.PaymentClient.charge(PaymentClient.java:56)",
+        "error_logs": "2024-01-15 15:00:00 ERROR c.a.c.PaymentClient - Connection timeout after 30000ms\n2024-01-15 15:00:00 WARN c.a.c.PaymentClient - Retry attempt 3/3 failed",
+        "environment": "Java 17, AWS us-east-1"
+      },
+      "expected": {
+        "severity": "high",
+        "priority": "P1",
+        "exception_type": "SocketTimeoutException",
+        "file_name": "PaymentClient.java",
+        "line_number": 56,
+        "method_name": "charge"
+      }
+    },
+    {
+      "id": "TC-010",
+      "description": "Index out of bounds in array processing",
+      "bug": {
+        "title": "ArrayIndexOutOfBoundsException in data export function",
+        "description": "The data export function crashes when processing empty datasets. Array bounds not checked before access.",
+        "stack_trace": "java.lang.ArrayIndexOutOfBoundsException: Index 0 out of bounds for length 0\n\tat com.app.service.DataExporter.exportCSV(DataExporter.java:112)\n\tat com.app.controller.ExportController.download(ExportController.java:34)",
+        "error_logs": "2024-01-15 12:30:00 ERROR c.a.s.DataExporter - Export failed for empty dataset",
+        "environment": "Java 17, Spring Boot 3.2"
+      },
+      "expected": {
+        "severity": "high",
+        "priority": "P1",
+        "exception_type": "ArrayIndexOutOfBoundsException",
+        "file_name": "DataExporter.java",
+        "line_number": 112,
+        "method_name": "exportCSV"
+      }
+    }
+  ],
+  "metadata": {
+    "total_cases": 10,
+    "languages": ["Java", "Python", "Node.js"],
+    "severity_distribution": {
+      "critical": 3,
+      "high": 4,
+      "medium": 2,
+      "low": 1
+    },
+    "has_stack_trace": 7,
+    "has_error_logs": 9,
+    "created": "2024-01-15"
+  }
+}

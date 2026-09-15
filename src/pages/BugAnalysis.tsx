@@ -90,13 +90,44 @@ export default function BugAnalysis({ bug, analysis }: BugAnalysisProps) {
             <span className="ml-auto text-xs px-2 py-0.5 bg-green-900/30 text-green-400 rounded-full border border-green-700/50">Complete</span>
           </div>
           <div className="space-y-3">
+            {/* M2: Failure Point & Code Path */}
+            {(analysis.logAnalysis.failurePoint || analysis.logAnalysis.codePath) && (
+              <div className="grid grid-cols-2 gap-3">
+                {analysis.logAnalysis.failurePoint && (
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <p className="text-xs text-gray-400 mb-1">Failure Point</p>
+                    <p className="text-sm text-white font-mono">{analysis.logAnalysis.failurePoint}</p>
+                  </div>
+                )}
+                {analysis.logAnalysis.codePath && (
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <p className="text-xs text-gray-400 mb-1">Code Path</p>
+                    <p className="text-sm text-white font-mono truncate">{analysis.logAnalysis.codePath}</p>
+                  </div>
+                )}
+              </div>
+            )}
+            
             <div>
               <p className="text-xs text-gray-400 mb-2">Exceptions Found ({analysis.logAnalysis.exceptions.length})</p>
               <div className="space-y-1.5">
                 {analysis.logAnalysis.exceptions.map((exc, i) => (
                   <div key={i} className="bg-gray-800/50 rounded p-2 text-xs">
-                    <span className="text-red-400 font-mono">{exc.type}</span>
-                    <p className="text-gray-400 mt-0.5 truncate">{exc.message}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-red-400 font-mono">{exc.exceptionType || exc.type}</span>
+                      {exc.confidence && (
+                        <span className="text-xs text-gray-500">{(exc.confidence * 100).toFixed(0)}%</span>
+                      )}
+                    </div>
+                    <p className="text-gray-400 mt-0.5 truncate">{exc.errorMessage || exc.message}</p>
+                    {(exc.fileName || exc.className || exc.methodName) && (
+                      <div className="mt-1 flex flex-wrap gap-2 text-gray-500">
+                        {exc.fileName && <span className="font-mono">{exc.fileName}</span>}
+                        {exc.lineNumber && <span>:line {exc.lineNumber}</span>}
+                        {exc.className && <span className="text-blue-400">{exc.className}</span>}
+                        {exc.methodName && <span className="text-green-400">.{exc.methodName}()</span>}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -111,6 +142,16 @@ export default function BugAnalysis({ bug, analysis }: BugAnalysisProps) {
                 ))}
               </div>
             </div>
+            {/* M2: Confidence */}
+            {analysis.logAnalysis.confidence && (
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-gray-400">Confidence:</p>
+                <div className="flex-1 bg-gray-700 rounded-full h-2">
+                  <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${analysis.logAnalysis.confidence * 100}%` }} />
+                </div>
+                <span className="text-xs text-gray-300">{(analysis.logAnalysis.confidence * 100).toFixed(0)}%</span>
+              </div>
+            )}
             <p className="text-xs text-gray-400 italic">{analysis.logAnalysis.summary}</p>
           </div>
         </div>
