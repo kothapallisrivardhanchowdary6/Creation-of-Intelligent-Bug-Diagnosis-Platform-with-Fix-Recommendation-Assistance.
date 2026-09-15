@@ -41,7 +41,7 @@ export default function Dashboard({ bugs, onNavigate, onAnalyze, onViewAnalysis 
             <span className="text-xs font-medium text-yellow-400 uppercase tracking-wider">AI-Powered Analysis</span>
           </div>
           <h1 className="text-2xl lg:text-3xl font-bold text-white mb-2">
-            Software Defect Analysis System
+            DefectMind AI
           </h1>
           <p className="text-gray-400 max-w-2xl mb-6">
             Submit bugs and leverage AI agents for automated triage, root cause analysis, duplicate detection,

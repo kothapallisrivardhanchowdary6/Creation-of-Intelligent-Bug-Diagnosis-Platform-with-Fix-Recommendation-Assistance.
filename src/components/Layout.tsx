@@ -47,8 +47,8 @@ export default function Layout({ children, currentPage, onNavigate, notification
             <Bug className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="font-bold text-sm text-white">AI Defect Analysis</h1>
-            <p className="text-xs text-gray-400">Milestone 1 — Foundation</p>
+            <h1 className="font-bold text-sm text-white">DefectMind AI</h1>
+            <p className="text-xs text-gray-400">Intelligent Defect Analysis</p>
           </div>
         </div>
 
