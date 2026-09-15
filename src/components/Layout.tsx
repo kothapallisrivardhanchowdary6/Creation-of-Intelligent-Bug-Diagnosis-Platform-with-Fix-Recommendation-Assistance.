@@ -5,7 +5,6 @@ import {
   FileText,
   Search,
   Cpu,
-  Activity,
   Menu,
   X,
   Loader2,
@@ -29,7 +28,6 @@ const navItems = [
   { id: 'bugs', label: 'Bug List', icon: Bug },
   { id: 'analysis', label: 'Analysis', icon: Cpu },
   { id: 'knowledge', label: 'Knowledge Base', icon: Search },
-  { id: 'architecture', label: 'Architecture', icon: Activity },
 ];
 
 export default function Layout({ children, currentPage, onNavigate, notification, isLoading }: LayoutProps) {

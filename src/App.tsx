@@ -6,7 +6,6 @@ import BugSubmission from './pages/BugSubmission';
 import BugList from './pages/BugList';
 import BugAnalysis from './pages/BugAnalysis';
 import KnowledgeBase from './pages/KnowledgeBase';
-import Architecture from './pages/Architecture';
 import { listBugs, submitBug, analyzeBug, getAnalysis, deleteBug, searchBugs } from './services/api';
 
 export default function App() {
@@ -103,8 +102,6 @@ export default function App() {
         return <BugAnalysis bug={selectedBug} analysis={analysisResult} />;
       case 'knowledge':
         return <KnowledgeBase onSearch={handleSearch} />;
-      case 'architecture':
-        return <Architecture />;
       default:
         return <Dashboard bugs={bugs} onNavigate={setCurrentPage} onAnalyze={handleAnalyzeBug} onViewAnalysis={handleViewAnalysis} />;
     }
