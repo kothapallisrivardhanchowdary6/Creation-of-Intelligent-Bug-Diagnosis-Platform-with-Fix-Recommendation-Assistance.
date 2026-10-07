@@ -1,0 +1,336 @@
+{
+  "version": "3.0.0-M3",
+  "description": "Milestone 3 test cases covering all agent scenarios: duplicate, related, unrelated, known root cause, and insufficient evidence.",
+  "test_cases": [
+    {
+      "id": "TC-M3-001",
+      "name": "Likely Duplicate — NullPointerException in NetworkManager",
+      "scenario": "duplicate",
+      "description": "Bug very similar to historical defect MOZ-1001. Expects likely_duplicate classification.",
+      "bug": {
+        "id": "TC-M3-001",
+        "title": "NullPointerException in NetworkManager when connection is lost",
+        "description": "The application throws a NullPointerException when the network connection drops during an active download. The connection object is accessed without null check in the retry handler.",
+        "stack_trace": "java.lang.NullPointerException: Cannot invoke method getStatus() on null object\n\tat com.app.network.NetworkManager.retryConnection(NetworkManager.java:247)\n\tat com.app.network.NetworkManager.handleConnectionLoss(NetworkManager.java:189)\n\tat com.app.download.DownloadManager.onNetworkEvent(DownloadManager.java:312)",
+        "error_logs": "ERROR [NetworkManager] Connection object is null in retry handler\nWARN  [DownloadManager] Retry attempt 3/3 failed\nFATAL [DownloadManager] Unrecoverable download failure",
+        "environment": "Java 11, Linux production"
+      },
+      "expected": {
+        "triage": {
+          "severity": "critical",
+          "priority": "P0",
+          "category_contains": "Null"
+        },
+        "log_analysis": {
+          "exception_count_min": 1,
+          "exception_type_contains": "NullPointerException",
+          "failure_point_present": true
+        },
+        "root_cause": {
+          "status": "success",
+          "confidence_min": 0.5,
+          "probable_cause_not_empty": true,
+          "retrieved_evidence_count_min": 1
+        },
+        "duplicate_detection": {
+          "classification": "likely_duplicate",
+          "top_match_similarity_min": 0.70,
+          "matched_bugs_count_min": 1
+        },
+        "remediation": {
+          "status": "success",
+          "suggested_fix_not_empty": true,
+          "debugging_steps_count_min": 2,
+          "validation_steps_count_min": 2
+        }
+      }
+    },
+    {
+      "id": "TC-M3-002",
+      "name": "Related Issue — Race Condition in Thread Pool",
+      "scenario": "related_issue",
+      "description": "Bug related to but not identical to APC-2002 (race condition/deadlock). Expects related_issue classification.",
+      "bug": {
+        "id": "TC-M3-002",
+        "title": "Race condition in connection pool causing intermittent failures under load",
+        "description": "Under high concurrency, the connection pool occasionally returns already-in-use connections. This causes intermittent 'connection already in use' errors. The issue is reproducible at >500 concurrent users.",
+        "stack_trace": "java.lang.IllegalStateException: Connection is already in use\n\tat com.app.pool.ConnectionPool.checkout(ConnectionPool.java:156)\n\tat com.app.service.DatabaseService.getConnection(DatabaseService.java:89)\n\tat com.app.api.RequestHandler.processRequest(RequestHandler.java:45)",
+        "error_logs": "WARN  [ConnectionPool] Thread-0 attempting to checkout connection already held by Thread-7\nERROR [ConnectionPool] Race condition detected: concurrent access to pool slot 3\nWARN  [ConnectionPool] Retry 2/3 for connection checkout",
+        "environment": "Java 11, Apache Tomcat 9, 16-core production server"
+      },
+      "expected": {
+        "triage": {
+          "severity_in": ["critical", "high"],
+          "category_contains": "Concurren"
+        },
+        "log_analysis": {
+          "exception_count_min": 1,
+          "exception_type_contains": "IllegalStateException"
+        },
+        "root_cause": {
+          "status": "success",
+          "confidence_min": 0.4,
+          "probable_cause_not_empty": true
+        },
+        "duplicate_detection": {
+          "classification_in": ["related_issue", "likely_duplicate", "new_unmatched"],
+          "matched_bugs_count_min": 0
+        },
+        "remediation": {
+          "status": "success",
+          "suggested_fix_not_empty": true,
+          "debugging_steps_count_min": 1
+        }
+      }
+    },
+    {
+      "id": "TC-M3-003",
+      "name": "New Unmatched — CSS Grid Rendering Regression",
+      "scenario": "unrelated",
+      "description": "UI rendering bug unrelated to any historical defect. Expects new_unmatched classification.",
+      "bug": {
+        "id": "TC-M3-003",
+        "title": "CSS Grid layout breaks with nested flex containers after v2.5 upgrade",
+        "description": "After upgrading to v2.5, dashboard cards no longer render correctly. Grid columns collapse to single column when parent has display:flex. The issue only occurs in Chrome 118+ and does not reproduce in Firefox or Safari.",
+        "stack_trace": "",
+        "error_logs": "WARN  [LayoutEngine] Grid template columns recalculated unexpectedly\nWARN  [LayoutEngine] auto-fit minmax constraint ignored for nested flex child",
+        "environment": "Chrome 118, React 18, CSS Grid, production"
+      },
+      "expected": {
+        "triage": {
+          "severity_in": ["medium", "low", "high"],
+          "category_contains_any": ["UI", "Rendering", "Logic"]
+        },
+        "log_analysis": {
+          "exception_count_min": 0,
+          "failure_point_present": false
+        },
+        "root_cause": {
+          "status_in": ["success", "insufficient_evidence"],
+          "probable_cause_not_empty": true
+        },
+        "duplicate_detection": {
+          "classification_in": ["new_unmatched", "related_issue"],
+          "top_match_similarity_max": 0.80
+        },
+        "remediation": {
+          "status": "success",
+          "suggested_fix_not_empty": true
+        }
+      }
+    },
+    {
+      "id": "TC-M3-004",
+      "name": "Known Root Cause — Memory Leak in Tab Renderer",
+      "scenario": "known_root_cause",
+      "description": "Bug with clear root cause evidence matching historical defect MOZ-1002. Tests that root cause agent surfaces historical resolution.",
+      "bug": {
+        "id": "TC-M3-004",
+        "title": "Memory leak in browser tab renderer when rapidly switching between tabs",
+        "description": "Browser memory usage increases by approximately 50MB per 100 tab switches and never recovers. Heap dump shows render context objects are not being garbage collected. Issue causes browser crash after extended use.",
+        "stack_trace": "java.lang.OutOfMemoryError: Java heap space\n\tat java.util.Arrays.copyOf(Arrays.java:3537)\n\tat com.browser.render.TabRenderer.createRenderContext(TabRenderer.java:445)\n\tat com.browser.ui.TabManager.switchTab(TabManager.java:112)",
+        "error_logs": "ERROR [TabRenderer] OutOfMemoryError: unable to allocate render context\nWARN  [TabManager] Memory pressure detected: heap at 92%\nERROR [GarbageCollector] Full GC unable to free sufficient memory",
+        "environment": "Java 11, 8GB RAM, 200+ open tabs"
+      },
+      "expected": {
+        "triage": {
+          "severity_in": ["critical", "high"],
+          "category_contains": "Memory"
+        },
+        "log_analysis": {
+          "exception_count_min": 1,
+          "exception_type_contains": "OutOfMemoryError",
+          "failure_point_present": true
+        },
+        "root_cause": {
+          "status": "success",
+          "confidence_min": 0.5,
+          "probable_cause_not_empty": true,
+          "retrieved_evidence_count_min": 1
+        },
+        "duplicate_detection": {
+          "matched_bugs_count_min": 1,
+          "top_match_similarity_min": 0.50
+        },
+        "remediation": {
+          "status": "success",
+          "suggested_fix_not_empty": true,
+          "historical_resolutions_count_min": 0
+        }
+      }
+    },
+    {
+      "id": "TC-M3-005",
+      "name": "Insufficient Evidence — Vague Bug Report",
+      "scenario": "insufficient_evidence",
+      "description": "Bug with minimal information: no stack trace, no error logs, and a vague description. Tests that agents handle sparse data gracefully.",
+      "bug": {
+        "id": "TC-M3-005",
+        "title": "Something seems wrong sometimes",
+        "description": "It doesn't work.",
+        "stack_trace": "",
+        "error_logs": "",
+        "environment": ""
+      },
+      "expected": {
+        "triage": {
+          "severity_in": ["low", "medium"],
+          "confidence_max": 0.70
+        },
+        "log_analysis": {
+          "exception_count_min": 0,
+          "confidence_max": 0.50
+        },
+        "root_cause": {
+          "status_in": ["insufficient_evidence", "success"],
+          "confidence_max": 0.50
+        },
+        "duplicate_detection": {
+          "classification_in": ["new_unmatched", "related_issue", "insufficient_evidence"]
+        },
+        "remediation": {
+          "status_in": ["success", "insufficient_evidence"],
+          "suggested_fix_not_empty": true
+        }
+      }
+    },
+    {
+      "id": "TC-M3-006",
+      "name": "Security Vulnerability — SQL Injection",
+      "scenario": "known_root_cause",
+      "description": "Security bug with clear root cause (SQL injection). Tests critical severity classification and security-specific remediation.",
+      "bug": {
+        "id": "TC-M3-006",
+        "title": "SQL injection vulnerability in login endpoint allows authentication bypass",
+        "description": "The login endpoint concatenates user-supplied credentials directly into SQL queries without parameterization. An attacker can supply ' OR '1'='1 as username to bypass authentication. Confirmed exploitable in production.",
+        "stack_trace": "org.postgresql.util.PSQLException: ERROR: syntax error at or near \"'\"\n\tat com.app.auth.LoginController.authenticate(LoginController.java:78)\n\tat com.app.auth.AuthFilter.doFilter(AuthFilter.java:45)",
+        "error_logs": "ERROR [LoginController] SQL syntax error in authentication query\nWARN  [Security] Potential injection attempt detected from IP 192.168.1.100\nERROR [Database] Query execution failed: invalid syntax",
+        "environment": "PostgreSQL 14, Spring Boot 3, production"
+      },
+      "expected": {
+        "triage": {
+          "severity": "critical",
+          "priority": "P0",
+          "category_contains_any": ["Security", "Input"]
+        },
+        "log_analysis": {
+          "exception_count_min": 1,
+          "exception_type_contains": "Exception"
+        },
+        "root_cause": {
+          "status": "success",
+          "confidence_min": 0.4,
+          "probable_cause_not_empty": true
+        },
+        "duplicate_detection": {
+          "classification_in": ["likely_duplicate", "related_issue", "new_unmatched"]
+        },
+        "remediation": {
+          "status": "success",
+          "suggested_fix_not_empty": true,
+          "debugging_steps_count_min": 2
+        }
+      }
+    },
+    {
+      "id": "TC-M3-007",
+      "name": "Python ValueError — Date Parsing Failure",
+      "scenario": "related_issue",
+      "description": "Python exception with clear stack trace. Tests Python stack trace parsing and root cause analysis.",
+      "bug": {
+        "id": "TC-M3-007",
+        "title": "ValueError in date parsing when input contains non-ISO format dates",
+        "description": "The report generation module crashes with ValueError when processing CSV imports containing dates in DD/MM/YYYY format. The parser only handles ISO 8601 format.",
+        "stack_trace": "Traceback (most recent call last):\n  File \"/app/reports/generator.py\", line 156, in parse_date\n    return datetime.strptime(date_str, '%Y-%m-%d')\nValueError: time data '15/01/2024' does not match format '%Y-%m-%d'",
+        "error_logs": "ERROR [ReportGenerator] Failed to parse date: 15/01/2024\nWARN  [CSVImporter] 47 rows contain non-standard date formats\nERROR [BatchProcessor] Batch aborted after 3 consecutive parse failures",
+        "environment": "Python 3.11, FastAPI, production data import"
+      },
+      "expected": {
+        "triage": {
+          "severity_in": ["high", "medium"],
+          "category_contains_any": ["Input", "Logic", "Null"]
+        },
+        "log_analysis": {
+          "exception_count_min": 1,
+          "exception_type_contains": "ValueError",
+          "failure_point_present": true,
+          "line_number_present": true
+        },
+        "root_cause": {
+          "status": "success",
+          "confidence_min": 0.4,
+          "probable_cause_not_empty": true
+        },
+        "duplicate_detection": {
+          "classification_in": ["new_unmatched", "related_issue", "likely_duplicate"]
+        },
+        "remediation": {
+          "status": "success",
+          "suggested_fix_not_empty": true
+        }
+      }
+    },
+    {
+      "id": "TC-M3-008",
+      "name": "Node.js TypeError — Undefined Property Access",
+      "scenario": "related_issue",
+      "description": "Node.js error with stack trace. Tests Node.js parsing and agent handling.",
+      "bug": {
+        "id": "TC-M3-008",
+        "title": "TypeError when accessing user.profile in session middleware after logout",
+        "description": "After a user logs out and attempts to access a protected route, the session middleware crashes because user.profile is undefined. The session is cleared but the middleware still attempts to read profile properties.",
+        "stack_trace": "TypeError: Cannot read properties of undefined (reading 'displayName')\n    at SessionMiddleware.enrichRequest (/app/middleware/session.js:89:24)\n    at Layer.handle [as handle_request] (/app/node_modules/express/lib/router/layer.js:95:5)\n    at next (/app/node_modules/express/lib/router/route.js:137:13)",
+        "error_logs": "ERROR [SessionMiddleware] user.profile is undefined after logout\nWARN  [SessionStore] Session TTL expired for user abc123\nERROR [RequestHandler] Unhandled exception in middleware chain",
+        "environment": "Node.js 18, Express 4, Redis session store"
+      },
+      "expected": {
+        "triage": {
+          "severity_in": ["high", "medium"],
+          "category_contains_any": ["Null", "Logic"]
+        },
+        "log_analysis": {
+          "exception_count_min": 1,
+          "exception_type_contains": "TypeError",
+          "failure_point_present": true
+        },
+        "root_cause": {
+          "status": "success",
+          "confidence_min": 0.4,
+          "probable_cause_not_empty": true
+        },
+        "duplicate_detection": {
+          "classification_in": ["new_unmatched", "related_issue", "likely_duplicate"]
+        },
+        "remediation": {
+          "status": "success",
+          "suggested_fix_not_empty": true
+        }
+      }
+    }
+  ],
+  "evaluation_criteria": {
+    "root_cause_agent": {
+      "must_have_probable_cause": true,
+      "must_separate_evidence_from_reasoning": true,
+      "must_return_insufficient_evidence_when_appropriate": true,
+      "confidence_must_be_0_to_1": true
+    },
+    "duplicate_detection_agent": {
+      "must_use_real_similarity_scores": true,
+      "must_classify_each_match": true,
+      "must_report_thresholds": true,
+      "similarity_must_be_0_to_1": true
+    },
+    "remediation_agent": {
+      "must_have_suggested_fix": true,
+      "must_label_fix_source": true,
+      "must_have_implementation_steps": true,
+      "must_distinguish_speculative_steps": true
+    },
+    "orchestrator": {
+      "must_run_all_5_agents": true,
+      "must_complete_without_crash": true,
+      "must_return_bug_specific_results": true
+    }
+  }
+}

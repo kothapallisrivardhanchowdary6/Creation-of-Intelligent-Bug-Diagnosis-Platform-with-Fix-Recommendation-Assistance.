@@ -9,6 +9,10 @@ logger = logging.getLogger(__name__)
 class ChromaService:
     """Manages ChromaDB vector database operations."""
 
+    # In-memory store used only when ChromaDB is not installed (mock mode).
+    # Keyed by document ID → {id, document, metadata}.
+    _mock_store: dict = {}
+
     def __init__(self):
         self.client = None
         self.collection = None
@@ -43,7 +47,14 @@ class ChromaService:
             )
             logger.info(f"Added {len(ids)} documents to ChromaDB")
         else:
-            logger.info(f"[Mock] Would add {len(ids)} documents")
+            # Mock mode — persist in the class-level dict so verify/get work
+            for i, doc_id in enumerate(ids):
+                ChromaService._mock_store[doc_id] = {
+                    "id": doc_id,
+                    "document": documents[i] if i < len(documents) else "",
+                    "metadata": metadatas[i] if i < len(metadatas) else {},
+                }
+            logger.info(f"[Mock] Stored {len(ids)} documents in mock store")
 
     def search(self, query_embedding: List[float], top_k: int = 5,
                where: Optional[Dict] = None) -> List[Dict[str, Any]]:
@@ -94,6 +105,85 @@ class ChromaService:
             "collection_name": self.collection_name,
             "status": "mock"
         }
+
+    def get_all_documents(self, limit: int = 500) -> List[Dict[str, Any]]:
+        """
+        Retrieve all documents from the collection (up to `limit`).
+        Used by analytics and cluster endpoints.
+        Returns list of {id, document, metadata}.
+        """
+        if self.collection is not None:
+            try:
+                result = self.collection.get(
+                    limit=limit,
+                    include=["documents", "metadatas"],
+                )
+                docs = []
+                ids = result.get("ids") or []
+                documents = result.get("documents") or []
+                metadatas = result.get("metadatas") or []
+                for i, doc_id in enumerate(ids):
+                    docs.append({
+                        "id": doc_id,
+                        "document": documents[i] if i < len(documents) else "",
+                        "metadata": metadatas[i] if i < len(metadatas) else {},
+                    })
+                logger.info(f"Retrieved {len(docs)} documents from ChromaDB")
+                return docs
+            except Exception as e:
+                logger.error(f"get_all_documents failed: {e}", exc_info=True)
+                return []
+        else:
+            # Return mock documents for development
+            return [
+                {"id": "MOZ-1001", "document": "NullPointerException in NetworkManager when connection drops during file download", "metadata": {"project": "Mozilla Firefox", "component": "Networking", "severity": "critical", "resolution": "Fixed by adding null check before accessing connection object"}},
+                {"id": "MOZ-1002", "document": "Memory leak in tab rendering engine when switching tabs rapidly", "metadata": {"project": "Mozilla Firefox", "component": "Layout Engine", "severity": "high", "resolution": "Implemented proper cleanup of render contexts"}},
+                {"id": "MOZ-1003", "document": "Segmentation fault in WebGL renderer with unsupported shader operations", "metadata": {"project": "Mozilla Firefox", "component": "Graphics", "severity": "high", "resolution": "Added shader capability validation"}},
+                {"id": "APC-2001", "document": "StackOverflowError in recursive XML parser with deeply nested elements", "metadata": {"project": "Apache HTTP Server", "component": "Core", "severity": "critical", "resolution": "Converted recursive parser to iterative approach"}},
+                {"id": "APC-2002", "document": "Race condition in thread pool causing deadlock under high concurrency", "metadata": {"project": "Apache Tomcat", "component": "Thread Pool", "severity": "critical", "resolution": "Added proper lock ordering and timeout mechanism"}},
+                {"id": "APC-2003", "document": "Buffer overflow in HTTP header parsing with malformed Content-Type", "metadata": {"project": "Apache HTTP Server", "component": "HTTP Parser", "severity": "critical", "resolution": "Implemented bounds checking and input validation"}},
+                {"id": "APC-2004", "document": "Connection leak in connection pool when exception occurs during checkout", "metadata": {"project": "Apache Tomcat", "component": "Connection Pool", "severity": "high", "resolution": "Added try-finally block to ensure connection return"}},
+                {"id": "ECL-3001", "document": "ClassCastException when refactoring generic types in JDT compiler", "metadata": {"project": "Eclipse JDT", "component": "Compiler", "severity": "medium", "resolution": "Added type erasure handling in generic type resolution"}},
+                {"id": "ECL-3002", "document": "UI freeze when opening large workspace with 500+ projects", "metadata": {"project": "Eclipse Platform", "component": "UI Framework", "severity": "high", "resolution": "Moved workspace loading to background thread"}},
+                {"id": "ECL-3003", "document": "IndexOutOfBoundsException in code completion with partial token matching", "metadata": {"project": "Eclipse JDT", "component": "Content Assist", "severity": "medium", "resolution": "Added boundary checks in token matching algorithm"}},
+                {"id": "ECL-3004", "document": "Deadlock in plugin activation when circular dependencies exist", "metadata": {"project": "Eclipse Platform", "component": "Plugin Framework", "severity": "critical", "resolution": "Implemented dependency graph cycle detection"}},
+                {"id": "MOZ-1004", "document": "CSS Grid layout miscalculation with auto-fit and minmax constraints", "metadata": {"project": "Mozilla Firefox", "component": "CSS Engine", "severity": "medium", "resolution": "Fixed constraint solving algorithm for auto-fit tracks"}},
+            ]
+
+    def get_document_by_id(self, doc_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve a single document by ID."""
+        if self.collection is not None:
+            try:
+                result = self.collection.get(
+                    ids=[doc_id],
+                    include=["documents", "metadatas"],
+                )
+                ids = result.get("ids") or []
+                if ids:
+                    return {
+                        "id": ids[0],
+                        "document": (result.get("documents") or [""])[0],
+                        "metadata": (result.get("metadatas") or [{}])[0],
+                    }
+                return None
+            except Exception as e:
+                logger.error(f"get_document_by_id failed for {doc_id}: {e}")
+                return None
+        # Mock mode — check the in-memory store first, then static list
+        if doc_id in ChromaService._mock_store:
+            return ChromaService._mock_store[doc_id]
+        return None
+
+    def document_exists(self, doc_id: str) -> bool:
+        """Check if a document with the given ID already exists."""
+        if self.collection is not None:
+            try:
+                result = self.collection.get(ids=[doc_id])
+                return len(result.get("ids") or []) > 0
+            except Exception:
+                return False
+        # Mock mode
+        return doc_id in ChromaService._mock_store
 
     def delete_collection(self):
         """Delete the collection."""

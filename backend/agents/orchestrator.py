@@ -1,22 +1,29 @@
 """
-Milestone 2: Enhanced Agent Orchestrator.
+Milestone 3: Full Agent Orchestrator.
 
-Flow:
-Bug Submission → Agent Orchestrator
-                    ↙       ↘
-              Triage    Log Analysis  (parallel)
-                    ↘       ↙
-              Combined Bug Context
-                    ↓
-           Future M3 Agents (Root Cause, Duplicate, Remediation)
+Pipeline:
+  Bug Submission
+      ↓
+  ┌───────────────────────────────┐
+  │   Step 1: Triage Agent        │ ←─── parallel ──→
+  │   Step 2: Log Analysis Agent  │                   │
+  └───────────────────────────────┘                   │
+              ↓  Combined Context                      │
+  Step 3: Root Cause Agent  (needs triage + log)       │
+  Step 4: Duplicate Detection (independent embed search)
+              ↓  (all results available)
+  Step 5: Remediation Agent  (needs all prior results)
+              ↓
+  Single structured AnalysisResponse
 
-Handles missing logs, invalid input, agent failure, and partial results.
+Preserves full backward-compat with M1/M2 callers.
+Handles agent failures, missing logs, and partial results gracefully.
 """
 
 import asyncio
 import logging
 import time
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from datetime import datetime
 
 from agents.triage_agent import TriageAgent, TriageResult
@@ -27,229 +34,290 @@ logger = logging.getLogger(__name__)
 
 class CombinedBugContext:
     """Combined context from Triage and Log Analysis agents."""
-    
+
     def __init__(self, triage: Optional[Dict] = None, log_analysis: Optional[Dict] = None):
         self.triage = triage
         self.log_analysis = log_analysis
-        self.has_triage = triage is not None and triage.get('status') == 'success'
-        self.has_log_analysis = log_analysis is not None and log_analysis.get('status') == 'success'
-    
+        self.has_triage = triage is not None and triage.get("status") == "success"
+        self.has_log_analysis = log_analysis is not None and log_analysis.get("status") == "success"
+
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for downstream agents."""
         return {
-            'triage': self.triage,
-            'log_analysis': self.log_analysis,
-            'has_triage': self.has_triage,
-            'has_log_analysis': self.has_log_analysis,
-            'combined_summary': self._generate_summary()
+            "triage": self.triage,
+            "log_analysis": self.log_analysis,
+            "has_triage": self.has_triage,
+            "has_log_analysis": self.has_log_analysis,
+            "combined_summary": self._generate_summary(),
         }
-    
+
     def _generate_summary(self) -> str:
-        """Generate combined summary."""
         parts = []
-        
         if self.has_triage and self.triage:
-            result = self.triage.get('result', {})
-            parts.append(f"Triage: {result.get('severity', 'unknown')} severity, {result.get('priority', 'unknown')} priority")
-        
+            r = self.triage.get("result", {})
+            parts.append(
+                f"Triage: {r.get('severity', 'unknown')} severity, {r.get('priority', 'unknown')} priority"
+            )
         if self.has_log_analysis and self.log_analysis:
-            result = self.log_analysis.get('result', {})
-            exceptions = result.get('exceptions', [])
+            r = self.log_analysis.get("result", {})
+            exceptions = r.get("exceptions", [])
             if exceptions:
-                exc_types = [e.get('exception_type', 'Unknown') for e in exceptions[:3]]
-                parts.append(f"Log Analysis: Found {len(exceptions)} exception(s) - {', '.join(exc_types)}")
+                exc_types = [e.get("exception_type", "Unknown") for e in exceptions[:3]]
+                parts.append(
+                    f"Log Analysis: Found {len(exceptions)} exception(s) — {', '.join(exc_types)}"
+                )
             else:
                 parts.append("Log Analysis: No structured exceptions found")
-        
-        return '. '.join(parts) if parts else "No analysis results available."
+        return ". ".join(parts) if parts else "No analysis results available."
 
 
 class AgentOrchestrator:
     """
-    Milestone 2 Orchestrator.
-    
-    Runs Triage and Log Analysis agents (potentially in parallel),
-    combines their results, and provides context for future M3 agents.
+    Milestone 3 Orchestrator.
+
+    Runs the full 5-agent pipeline:
+      Triage + Log Analysis (parallel) →
+      Root Cause + Duplicate Detection (parallel, both need M2 context) →
+      Remediation (needs all prior)
+
+    All agents wrapped in safe-call helpers — pipeline never crashes.
     """
 
     def __init__(self, llm_service=None, chroma_service=None, embedding_service=None):
         self.llm_service = llm_service
         self.chroma_service = chroma_service
         self.embedding_service = embedding_service
-        
-        # M2 Agents
+
+        # M2 Agents (always available)
         self.triage_agent = TriageAgent(llm_service)
         self.log_agent = LogAnalysisAgent(llm_service)
-    
-    async def run_m2_pipeline(self, bug_data: Dict[str, Any]) -> Dict[str, Any]:
+
+        # M3 Agents (lazy import to avoid circular deps)
+        self._root_cause_agent = None
+        self._duplicate_agent = None
+        self._remediation_agent = None
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Public entry points
+    # ──────────────────────────────────────────────────────────────────────
+
+    async def run_m3_pipeline(self, bug_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Run Milestone 2 pipeline: Triage + Log Analysis → Combined Context.
-        
-        This is the primary M2 entry point.
+        Full Milestone 3 pipeline.
+        Returns one structured response containing all 5 agent results.
         """
         start_time = time.time()
-        bug_id = bug_data.get('id', 'unknown')
-        logger.info(f"Starting M2 pipeline for bug: {bug_id}")
-        
-        results = {
+        bug_id = bug_data.get("id", "unknown")
+        logger.info(f"[M3] Starting full pipeline for bug: {bug_id}")
+
+        results: Dict[str, Any] = {
+            "bug_id": bug_id,
+            "timestamp": datetime.utcnow().isoformat(),
+            "milestone": "M3",
+            "agents": {},
+            "status": "pending",
+        }
+
+        # ── Step 1 + 2: Triage & Log Analysis in parallel ─────────────────
+        triage_task = self._safe_run(self.triage_agent, bug_data, "triage")
+        log_task = self._safe_run(self.log_agent, bug_data, "log_analysis")
+        triage_result, log_result = await asyncio.gather(triage_task, log_task)
+
+        results["agents"]["triage"] = triage_result
+        results["agents"]["log_analysis"] = log_result
+
+        combined = CombinedBugContext(triage_result, log_result)
+        results["combined_context"] = combined.to_dict()
+
+        if triage_result and triage_result.get("status") == "success":
+            results["triage"] = triage_result.get("result", {})
+        if log_result and log_result.get("status") == "success":
+            results["log_analysis"] = log_result.get("result", {})
+
+        # ── Step 3 + 4: Root Cause & Duplicate Detection in parallel ──────
+        rc_agent = self._get_root_cause_agent()
+        dup_agent = self._get_duplicate_agent()
+
+        rc_task = self._safe_run_with_context(
+            rc_agent, bug_data, triage_result, log_result, "root_cause"
+        )
+        dup_task = self._safe_run(dup_agent, bug_data, "duplicate_detection")
+
+        root_cause_result, duplicate_result = await asyncio.gather(rc_task, dup_task)
+
+        results["agents"]["root_cause"] = root_cause_result
+        results["agents"]["duplicate_detection"] = duplicate_result
+
+        if root_cause_result and root_cause_result.get("status") in ("success", "insufficient_evidence"):
+            results["root_cause"] = root_cause_result.get("result", {})
+        if duplicate_result and duplicate_result.get("status") in ("success", "insufficient_evidence"):
+            results["duplicate_detection"] = duplicate_result.get("result", {})
+
+        # ── Step 5: Remediation (needs all prior results) ─────────────────
+        rem_agent = self._get_remediation_agent()
+        remediation_result = await self._safe_run_remediation(
+            rem_agent,
+            bug_data,
+            triage_result,
+            log_result,
+            root_cause_result,
+            duplicate_result,
+        )
+
+        results["agents"]["remediation"] = remediation_result
+        if remediation_result and remediation_result.get("status") in ("success",):
+            results["remediation"] = remediation_result.get("result", {})
+
+        results["status"] = "completed"
+        results["total_duration"] = round(time.time() - start_time, 3)
+
+        logger.info(
+            f"[M3] Pipeline completed in {results['total_duration']:.2f}s for bug {bug_id}"
+        )
+        return results
+
+    async def run_m2_pipeline(self, bug_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Milestone 2 pipeline — Triage + Log Analysis only.
+        Preserved for backward compatibility.
+        """
+        start_time = time.time()
+        bug_id = bug_data.get("id", "unknown")
+        logger.info(f"[M2] Starting pipeline for bug: {bug_id}")
+
+        results: Dict[str, Any] = {
             "bug_id": bug_id,
             "timestamp": datetime.utcnow().isoformat(),
             "milestone": "M2",
             "agents": {},
-            "status": "pending"
+            "status": "pending",
         }
-        
-        # Run Triage and Log Analysis (potentially in parallel)
+
         try:
-            # Run both agents concurrently
-            triage_task = self._safe_run_agent(self.triage_agent, bug_data, "triage")
-            log_task = self._safe_run_agent(self.log_agent, bug_data, "log_analysis")
-            
+            triage_task = self._safe_run(self.triage_agent, bug_data, "triage")
+            log_task = self._safe_run(self.log_agent, bug_data, "log_analysis")
             triage_result, log_result = await asyncio.gather(triage_task, log_task)
-            
+
             results["agents"]["triage"] = triage_result
             results["agents"]["log_analysis"] = log_result
-            
-            # Create combined context
+
             combined = CombinedBugContext(triage_result, log_result)
             results["combined_context"] = combined.to_dict()
-            
-            # Extract key results for convenience
-            if triage_result and triage_result.get('status') == 'success':
-                results["triage"] = triage_result.get('result', {})
-            
-            if log_result and log_result.get('status') == 'success':
-                results["log_analysis"] = log_result.get('result', {})
-            
+
+            if triage_result and triage_result.get("status") == "success":
+                results["triage"] = triage_result.get("result", {})
+            if log_result and log_result.get("status") == "success":
+                results["log_analysis"] = log_result.get("result", {})
+
             results["status"] = "completed"
-            
+
         except Exception as e:
             logger.error(f"M2 pipeline failed: {e}")
             results["status"] = "error"
             results["error"] = str(e)
-        
-        total_duration = time.time() - start_time
-        results["total_duration"] = total_duration
-        
-        logger.info(f"M2 pipeline completed in {total_duration:.2f}s — Status: {results['status']}")
+
+        results["total_duration"] = round(time.time() - start_time, 3)
+        logger.info(f"[M2] Pipeline completed in {results['total_duration']:.2f}s")
         return results
-    
+
     async def run_full_pipeline(self, bug_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Run the full M1+M2 pipeline (backward compatible).
-        
-        M2 agents first, then M1 agents (Root Cause, Duplicate, Remediation).
+        Alias for run_m3_pipeline — full M3 pipeline entry point.
+        Kept for backward compat with code that calls run_full_pipeline.
         """
-        start_time = time.time()
-        bug_id = bug_data.get('id', 'unknown')
-        logger.info(f"Starting full pipeline for bug: {bug_id}")
-        
-        # Run M2 pipeline first
-        m2_results = await self.run_m2_pipeline(bug_data)
-        
-        # Now run M1 agents if available
-        results = m2_results.copy()
-        results["milestone"] = "M1+M2"
-        
-        try:
-            # Import M1 agents lazily to avoid circular imports
-            from agents.definitions import RootCauseAgent, DuplicateDetectionAgent, RemediationAgent
-            
-            if self.chroma_service and self.embedding_service:
-                # Step 3: Root Cause
-                logger.info("Step 3: Running Root Cause Agent...")
-                root_cause_agent = RootCauseAgent(self.llm_service, self.chroma_service, self.embedding_service)
-                triage_agent_result = results["agents"].get("triage", {})
-                log_agent_result = results["agents"].get("log_analysis", {})
-                root_cause_result = await self._safe_run_agent_with_context(
-                    root_cause_agent, bug_data, triage_agent_result, log_agent_result, "root_cause"
-                )
-                results["agents"]["root_cause"] = root_cause_result
-                if root_cause_result:
-                    results["root_cause"] = root_cause_result.get("result", {})
-                
-                # Step 4: Duplicate Detection
-                logger.info("Step 4: Running Duplicate Detection Agent...")
-                duplicate_agent = DuplicateDetectionAgent(self.chroma_service, self.embedding_service)
-                duplicate_result = self._safe_run_agent_sync(duplicate_agent, bug_data, "duplicate_detection")
-                results["agents"]["duplicate_detection"] = duplicate_result
-                if duplicate_result:
-                    results["duplicate_detection"] = duplicate_result.get("result", {})
-                
-                # Step 5: Remediation
-                logger.info("Step 5: Running Remediation Agent...")
-                remediation_agent = RemediationAgent(self.llm_service, self.chroma_service, self.embedding_service)
-                remediation_result = await self._safe_run_agent_with_context(
-                    remediation_agent, bug_data, 
-                    results["agents"].get("root_cause", {}),
-                    results["agents"].get("triage", {}),
-                    "remediation"
-                )
-                results["agents"]["remediation"] = remediation_result
-                if remediation_result:
-                    results["remediation"] = remediation_result.get("result", {})
-            
-        except ImportError:
-            logger.warning("M1 agents not available, returning M2 results only")
-        except Exception as e:
-            logger.error(f"M1 agents failed: {e}")
-            results["m1_error"] = str(e)
-        
-        total_duration = time.time() - start_time
-        results["total_duration"] = total_duration
-        
-        logger.info(f"Full pipeline completed in {total_duration:.2f}s")
-        return results
-    
-    async def _safe_run_agent(self, agent, bug_data: Dict, agent_name: str) -> Optional[Dict]:
-        """Safely run an agent with error handling."""
+        return await self.run_m3_pipeline(bug_data)
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Agent factory helpers (lazy init)
+    # ──────────────────────────────────────────────────────────────────────
+
+    def _get_root_cause_agent(self):
+        if self._root_cause_agent is None:
+            from agents.root_cause_agent import RootCauseAgent
+            self._root_cause_agent = RootCauseAgent(
+                self.llm_service, self.chroma_service, self.embedding_service
+            )
+        return self._root_cause_agent
+
+    def _get_duplicate_agent(self):
+        if self._duplicate_agent is None:
+            from agents.duplicate_detection_agent import DuplicateDetectionAgent
+            self._duplicate_agent = DuplicateDetectionAgent(
+                self.chroma_service, self.embedding_service
+            )
+        return self._duplicate_agent
+
+    def _get_remediation_agent(self):
+        if self._remediation_agent is None:
+            from agents.remediation_agent import RemediationAgent
+            self._remediation_agent = RemediationAgent(
+                self.llm_service, self.chroma_service, self.embedding_service
+            )
+        return self._remediation_agent
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Safe call wrappers
+    # ──────────────────────────────────────────────────────────────────────
+
+    async def _safe_run(
+        self, agent, bug_data: Dict, agent_name: str
+    ) -> Optional[Dict]:
+        """Safely run an agent that takes only bug_data."""
         try:
             result = await agent.analyze(bug_data)
-            logger.info(f"{agent_name} completed successfully")
+            logger.info(f"Agent '{agent_name}' completed — status={result.get('status','?')}")
             return result
         except Exception as e:
-            logger.error(f"{agent_name} failed: {e}")
-            return {
-                "agent": agent_name,
-                "status": "error",
-                "error": str(e),
-                "result": {},
-                "duration": 0,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-    
-    async def _safe_run_agent_with_context(self, agent, bug_data: Dict, 
-                                            context1: Dict, context2: Dict, 
-                                            agent_name: str) -> Optional[Dict]:
-        """Safely run an agent that takes additional context."""
+            logger.error(f"Agent '{agent_name}' failed: {e}", exc_info=True)
+            return self._error_result(agent_name, str(e))
+
+    async def _safe_run_with_context(
+        self,
+        agent,
+        bug_data: Dict,
+        context1: Optional[Dict],
+        context2: Optional[Dict],
+        agent_name: str,
+    ) -> Optional[Dict]:
+        """Safely run an agent that takes bug_data + two context dicts."""
         try:
-            result = await agent.analyze(bug_data, context1, context2)
-            logger.info(f"{agent_name} completed successfully")
+            result = await agent.analyze(bug_data, context1 or {}, context2 or {})
+            logger.info(f"Agent '{agent_name}' completed — status={result.get('status','?')}")
             return result
         except Exception as e:
-            logger.error(f"{agent_name} failed: {e}")
-            return {
-                "agent": agent_name,
-                "status": "error",
-                "error": str(e),
-                "result": {},
-                "duration": 0,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-    
-    def _safe_run_agent_sync(self, agent, bug_data: Dict, agent_name: str) -> Optional[Dict]:
-        """Safely run a synchronous agent."""
+            logger.error(f"Agent '{agent_name}' failed: {e}", exc_info=True)
+            return self._error_result(agent_name, str(e))
+
+    async def _safe_run_remediation(
+        self,
+        agent,
+        bug_data: Dict,
+        triage: Optional[Dict],
+        log: Optional[Dict],
+        root_cause: Optional[Dict],
+        duplicate: Optional[Dict],
+    ) -> Optional[Dict]:
+        """Safely run the Remediation agent (5 inputs)."""
         try:
-            result = agent.analyze(bug_data)
-            logger.info(f"{agent_name} completed successfully")
+            result = await agent.analyze(
+                bug_data,
+                triage or {},
+                log or {},
+                root_cause or {},
+                duplicate or {},
+            )
+            logger.info(f"Agent 'remediation' completed — status={result.get('status','?')}")
             return result
         except Exception as e:
-            logger.error(f"{agent_name} failed: {e}")
-            return {
-                "agent": agent_name,
-                "status": "error",
-                "error": str(e),
-                "result": {},
-                "duration": 0,
-                "timestamp": datetime.utcnow().isoformat()
-            }
+            logger.error(f"Agent 'remediation' failed: {e}", exc_info=True)
+            return self._error_result("remediation", str(e))
+
+    @staticmethod
+    def _error_result(agent_name: str, error: str) -> Dict[str, Any]:
+        return {
+            "agent": agent_name,
+            "status": "error",
+            "error": error,
+            "result": {},
+            "duration": 0,
+            "timestamp": datetime.utcnow().isoformat(),
+        }

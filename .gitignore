@@ -1,5 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+backend/venv/
+
+# Testing
+.pytest_cache/
+.coverage
+
+# Node
 node_modules/
-.next/
 dist/
-build/
-*.log
+
+# Environment
+.env
+.env.*
+
+# Generated/local data
+chroma_data/
+backend/chroma_data/
+
+# IDE
+.vscode/
+.idea/

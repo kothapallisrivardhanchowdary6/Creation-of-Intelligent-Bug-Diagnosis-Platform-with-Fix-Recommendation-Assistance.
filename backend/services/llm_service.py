@@ -70,32 +70,114 @@ class LLMService:
             return {"raw_response": response}
 
     def _mock_generate(self, prompt: str, system_prompt: str) -> str:
-        """Generate mock response for development."""
-        if "triage" in prompt.lower():
+        """Generate mock response for development — covers all M3 agent prompts."""
+        prompt_lower = prompt.lower()
+
+        # Root Cause Agent (M3)
+        if "root cause" in prompt_lower or "causal chain" in prompt_lower:
+            return json.dumps({
+                "probable_cause": "Missing null/bounds check before accessing an object property in the affected component's processing pipeline.",
+                "confidence": 0.78,
+                "reasoning": (
+                    "1. The exception type indicates a null or out-of-bounds access. "
+                    "2. The failure point is in the component's core processing loop. "
+                    "3. Historical defects with similar patterns were resolved by adding guard clauses."
+                ),
+                "agent_reasoning": (
+                    "Inferred that the unguarded access occurs under a specific conditional branch "
+                    "that is only reached when input arrives in a partially-initialised state."
+                ),
+                "related_components": ["Core Module", "Error Handler", "Input Validator"],
+                "hypotheses": [
+                    {
+                        "hypothesis": "A null reference is accessed in the processing pipeline without a prior null-check.",
+                        "confidence": 0.78,
+                        "supporting_evidence": [
+                            "Exception type confirms null access",
+                            "Failure point in core processing loop",
+                            "Similar historical defect MOZ-1001 had same root cause"
+                        ],
+                        "causal_chain": "Uninitialised input → processing loop → null access → exception"
+                    }
+                ]
+            })
+
+        # Remediation Agent (M3)
+        elif "remediation" in prompt_lower or "implementation_steps" in prompt_lower:
+            return json.dumps({
+                "suggested_fix": (
+                    "Add a null/bounds check at the entry of the affected method. "
+                    "Use Optional or guard clauses to handle missing values. "
+                    "Implement defensive programming with early returns for invalid inputs."
+                ),
+                "fix_from_best_practice": False,
+                "confidence": 0.82,
+                "agent_reasoning": (
+                    "Fix derived from the identified root cause: unguarded null access. "
+                    "Pattern matches resolution of similar historical defects."
+                ),
+                "implementation_steps": [
+                    {
+                        "step": "Locate the failure point identified in the log analysis.",
+                        "detail": "Use the code path from the stack trace to navigate to the exact line.",
+                        "is_speculative": False
+                    },
+                    {
+                        "step": "Add a null check or Optional guard before the property access.",
+                        "detail": "Example: if (obj == null) { log.warn('...'); return; }",
+                        "is_speculative": False
+                    },
+                    {
+                        "step": "Add a unit test covering the null/missing-input scenario.",
+                        "detail": "Test should assert the method handles null gracefully.",
+                        "is_speculative": False
+                    },
+                    {
+                        "step": "Review adjacent code for the same pattern.",
+                        "detail": "Search for similar unchecked accesses in the same component.",
+                        "is_speculative": True
+                    }
+                ],
+                "debugging_steps": [
+                    "Reproduce the issue locally with the same inputs.",
+                    "Add a breakpoint at the identified failure point.",
+                    "Inspect the object state just before the exception.",
+                    "Verify which code path leads to the null state."
+                ],
+                "validation_steps": [
+                    "Write a unit test that reproduces the failure.",
+                    "Run the test suite for the affected component.",
+                    "Verify fix resolves the original bug without regressions.",
+                    "Test boundary conditions and edge cases."
+                ],
+                "regression_tests": [
+                    "Run full test suite for the affected module.",
+                    "Execute integration tests for the user-facing workflow.",
+                    "Performance test to verify no regression under load."
+                ],
+                "best_practices": [
+                    "Always validate inputs at method boundaries.",
+                    "Use Optional types or null-object pattern for safer APIs.",
+                    "Add observability (logging, metrics) around critical paths."
+                ],
+                "estimated_effort": "2-4 hours",
+                "risk_level": "medium"
+            })
+
+        # Triage Agent (legacy + M3 compat)
+        elif "triage" in prompt_lower:
             return json.dumps({
                 "severity": "high",
                 "priority": "P1",
                 "category": "Null Reference",
                 "component": "Core Module",
                 "confidence": 0.85,
-                "reasoning": "Based on the error pattern, this appears to be a null reference issue requiring immediate attention."
+                "reasoning": (
+                    "Based on the error pattern, this appears to be a null reference issue "
+                    "requiring immediate attention."
+                )
             })
-        elif "root cause" in prompt.lower():
-            return json.dumps({
-                "probable_cause": "Missing null check before accessing object property in the processing pipeline",
-                "evidence": ["Error pattern matches null reference defects", "Stack trace points to uninitialized object"],
-                "confidence": 0.78,
-                "related_components": ["Core Module", "Error Handler"]
-            })
-        elif "remediation" in prompt.lower():
-            return json.dumps({
-                "suggested_fix": "Add null safety checks and optional chaining. Implement defensive programming with early returns.",
-                "debugging_steps": ["Reproduce in controlled environment", "Add logging at failure point", "Verify null checks"],
-                "validation_steps": ["Unit test for failure scenario", "Edge case testing", "Integration tests"],
-                "regression_tests": ["Run existing test suite", "End-to-end tests", "Performance verification"],
-                "estimated_effort": "2-4 hours",
-                "risk_level": "medium"
-            })
+
         else:
             return json.dumps({
                 "analysis": "Mock analysis result for development purposes.",

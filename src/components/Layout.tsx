@@ -10,7 +10,10 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
-  Info
+  Info,
+  BarChart3,
+  BookOpen,
+  FlaskConical,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -28,6 +31,10 @@ const navItems = [
   { id: 'bugs', label: 'Bug List', icon: Bug },
   { id: 'analysis', label: 'Analysis', icon: Cpu },
   { id: 'knowledge', label: 'Knowledge Base', icon: Search },
+  // ── M4 ──────────────────────────────────────────────
+  { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+  { id: 'kb-growth', label: 'KB Growth', icon: BookOpen },
+  { id: 'e2e-test', label: 'E2E Testing', icon: FlaskConical },
 ];
 
 export default function Layout({ children, currentPage, onNavigate, notification, isLoading }: LayoutProps) {
@@ -74,7 +81,7 @@ export default function Layout({ children, currentPage, onNavigate, notification
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
             <span>System Healthy</span>
           </div>
-          <p className="text-xs text-gray-600 mt-1">v1.0.0-M1 • Mock Mode</p>
+          <p className="text-xs text-gray-600 mt-1">v4.0.0-M4 • AI Platform</p>
         </div>
       </aside>
 
