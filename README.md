@@ -1,4 +1,4 @@
-# AI-Based Software Defect Analysis System — Milestones 1 & 2
+# AI-Based Software Defect Analysis System
 
 ## Overview
 
