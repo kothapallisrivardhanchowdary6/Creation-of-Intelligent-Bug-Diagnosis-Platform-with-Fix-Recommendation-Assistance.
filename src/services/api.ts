@@ -42,7 +42,7 @@ import {
 } from './mockData';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const API_BASE = '/api';
+const API_BASE = 'https://defectmind-ai.onrender.com/api';
 const REQUEST_TIMEOUT_MS = 60_000; // 60 s — analysis can take a while
 
 // ── Low-level fetch helper ────────────────────────────────────────────────────
